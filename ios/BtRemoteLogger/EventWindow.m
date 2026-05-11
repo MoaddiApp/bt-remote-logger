@@ -28,15 +28,27 @@
 }
 
 - (void)sendEvent:(UIEvent *)event {
-  if (event.type == UIEventTypeTouches) {
-    KeyEventListener *listener = [KeyEventListener shared];
-    if (listener) {
-      NSSet<UITouch *> *touches = [event allTouches];
-      for (UITouch *touch in touches) {
-        [listener handleTouch:touch];
+  KeyEventListener *listener = [KeyEventListener shared];
+
+  if (event.type == UIEventTypeTouches && listener) {
+    NSSet<UITouch *> *touches = [event allTouches];
+    for (UITouch *touch in touches) {
+      [listener handleTouch:touch];
+    }
+  }
+
+  if (event.type == UIEventTypePresses && listener) {
+    if ([event isKindOfClass:[UIPressesEvent class]]) {
+      UIPressesEvent *pressEvent = (UIPressesEvent *)event;
+      NSSet<UIPress *> *presses = [pressEvent allPresses];
+      for (UIPress *press in presses) {
+        if (press.phase == UIPressPhaseBegan) {
+          [listener handlePress:press action:@"DOWN_VIA_SEND"];
+        }
       }
     }
   }
+
   [super sendEvent:event];
 }
 

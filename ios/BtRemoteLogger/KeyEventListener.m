@@ -186,7 +186,7 @@ RCT_EXPORT_METHOD(removeListeners:(double)count) {
 
 - (void)handlePress:(UIPress *)press action:(NSString *)action {
   if (!_isListening || !_hasListeners) return;
-  if (![action isEqualToString:@"DOWN"]) return;
+  if (![action isEqualToString:@"DOWN"] && ![action isEqualToString:@"DOWN_VIA_SEND"]) return;
 
   NSString *buttonId = nil;
   NSString *label = nil;

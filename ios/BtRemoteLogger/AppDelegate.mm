@@ -10,9 +10,27 @@
   self.moduleName = @"BtRemoteLogger";
   self.initialProps = @{};
 
-  self.window = [[EventWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+  BOOL result = [super application:application didFinishLaunchingWithOptions:launchOptions];
 
-  return [super application:application didFinishLaunchingWithOptions:launchOptions];
+  UIWindow *oldWindow = self.window;
+  if (oldWindow && ![oldWindow isKindOfClass:[EventWindow class]]) {
+    EventWindow *ew = nil;
+    if (@available(iOS 13.0, *)) {
+      UIWindowScene *scene = oldWindow.windowScene;
+      if (scene) {
+        ew = [[EventWindow alloc] initWithWindowScene:scene];
+      }
+    }
+    if (!ew) {
+      ew = [[EventWindow alloc] initWithFrame:oldWindow.frame];
+    }
+    ew.rootViewController = oldWindow.rootViewController;
+    ew.backgroundColor = oldWindow.backgroundColor;
+    self.window = ew;
+    [ew makeKeyAndVisible];
+  }
+
+  return result;
 }
 
 - (NSURL *)sourceURLForBridge:(RCTBridge *)bridge
