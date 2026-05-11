@@ -14,6 +14,8 @@
 		13B07FC11A68108700A75B9A /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB71A68108700A75B9A /* main.m */; };
 		7699B88040F8A987B510C191 /* libPods-BtRemoteLogger-BtRemoteLoggerTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 19F6CBCC0A4E27FBF8BF4A61 /* libPods-BtRemoteLogger-BtRemoteLoggerTests.a */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		AABB000300000000000000A3 /* EventWindow.m in Sources */ = {isa = PBXBuildFile; fileRef = AABB000200000000000000A2 /* EventWindow.m */; };
+		AABB000600000000000000A6 /* KeyEventListener.m in Sources */ = {isa = PBXBuildFile; fileRef = AABB000500000000000000A5 /* KeyEventListener.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,6 +46,10 @@
 		5DCACB8F33CDC322A6C60F78 /* libPods-BtRemoteLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-BtRemoteLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = BtRemoteLogger/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		89C6BE57DB24E9ADA2F236DE /* Pods-BtRemoteLogger-BtRemoteLoggerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BtRemoteLogger-BtRemoteLoggerTests.release.xcconfig"; path = "Target Support Files/Pods-BtRemoteLogger-BtRemoteLoggerTests/Pods-BtRemoteLogger-BtRemoteLoggerTests.release.xcconfig"; sourceTree = "<group>"; };
+		AABB000100000000000000A1 /* EventWindow.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = EventWindow.h; path = BtRemoteLogger/EventWindow.h; sourceTree = "<group>"; };
+		AABB000200000000000000A2 /* EventWindow.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = EventWindow.m; path = BtRemoteLogger/EventWindow.m; sourceTree = "<group>"; };
+		AABB000400000000000000A4 /* KeyEventListener.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = KeyEventListener.h; path = BtRemoteLogger/KeyEventListener.h; sourceTree = "<group>"; };
+		AABB000500000000000000A5 /* KeyEventListener.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = KeyEventListener.m; path = BtRemoteLogger/KeyEventListener.m; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -89,6 +95,10 @@
 			children = (
 				13B07FAF1A68108700A75B9A /* AppDelegate.h */,
 				13B07FB01A68108700A75B9A /* AppDelegate.mm */,
+				AABB000100000000000000A1 /* EventWindow.h */,
+				AABB000200000000000000A2 /* EventWindow.m */,
+				AABB000400000000000000A4 /* KeyEventListener.h */,
+				AABB000500000000000000A5 /* KeyEventListener.m */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
@@ -396,6 +406,8 @@
 			files = (
 				13B07FBC1A68108700A75B9A /* AppDelegate.mm in Sources */,
 				13B07FC11A68108700A75B9A /* main.m in Sources */,
+				AABB000300000000000000A3 /* EventWindow.m in Sources */,
+				AABB000600000000000000A6 /* KeyEventListener.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

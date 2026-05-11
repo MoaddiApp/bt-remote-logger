@@ -1,4 +1,5 @@
 #import "AppDelegate.h"
+#import "EventWindow.h"
 
 #import <React/RCTBundleURLProvider.h>
 
@@ -7,9 +8,9 @@
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
   self.moduleName = @"BtRemoteLogger";
-  // You can add your custom initial props in the dictionary below.
-  // They will be passed down to the ViewController used by React Native.
   self.initialProps = @{};
+
+  self.window = [[EventWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
 
   return [super application:application didFinishLaunchingWithOptions:launchOptions];
 }
