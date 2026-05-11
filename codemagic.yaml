@@ -3,12 +3,13 @@ workflows:
     name: iOS TestFlight
     max_build_duration: 60
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.moaddiapp.btremotelogger
       vars:
         XCODE_WORKSPACE: "ios/BtRemoteLogger.xcworkspace"
         XCODE_SCHEME: "BtRemoteLogger"
+        BUNDLE_ID: "com.moaddiapp.btremotelogger"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.moaddiapp.btremotelogger
     scripts:
       - name: Install dependencies
         script: npm install
@@ -21,7 +22,3 @@ workflows:
             --scheme "$XCODE_SCHEME"
     artifacts:
       - build/ios/ipa/*.ipa
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
