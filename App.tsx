@@ -14,7 +14,9 @@ import {
 } from 'react-native';
 
 const {KeyEventListener} = NativeModules;
-const keyEventEmitter = new NativeEventEmitter(KeyEventListener);
+const keyEventEmitter = KeyEventListener
+  ? new NativeEventEmitter(KeyEventListener)
+  : null;
 
 interface ButtonEvent {
   id: string;
@@ -51,6 +53,8 @@ export default function App() {
   }, [flashAnim]);
 
   useEffect(() => {
+    if (!keyEventEmitter) return;
+
     const subscription = keyEventEmitter.addListener('onButtonDetected', (event: any) => {
       eventCounter.current += 1;
       const entry: ButtonEvent = {
@@ -71,6 +75,7 @@ export default function App() {
   }, [flashButton]);
 
   const handleToggle = () => {
+    if (!KeyEventListener) return;
     if (isActive) {
       KeyEventListener.stopListening();
       setIsActive(false);
