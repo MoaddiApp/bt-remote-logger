@@ -23,11 +23,13 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
   private var hoverLastY = 0f
   private var isTracking = false
 
-  private var pendingHeartRunnable: Runnable? = null
-  private var lastVolumeKeyTime = 0L
+  // Deferred detection: volume key and mouse click may arrive in either order
+  private var pendingVolumeKey = false
+  private var pendingClick = false
+  private var pendingRunnable: Runnable? = null
+  private val DETECT_WINDOW_MS = 400L
 
   private val SWIPE_THRESHOLD = 100f
-  private val HEART_DELAY_MS = 300L
 
   @ReactMethod
   fun startListening() {
@@ -39,7 +41,7 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
     if (instance == this) {
       instance = null
     }
-    cancelPendingHeart()
+    cancelPending()
   }
 
   @ReactMethod
@@ -52,16 +54,8 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
     if (action != KeyEvent.ACTION_DOWN) return true
 
     when (keyCode) {
-      KeyEvent.KEYCODE_VOLUME_UP -> {
-        lastVolumeKeyTime = System.currentTimeMillis()
-        cancelPendingHeart()
-        emitButton("GEAR", "Gear button (Volume Up)")
-        return true
-      }
-      KeyEvent.KEYCODE_VOLUME_DOWN -> {
-        lastVolumeKeyTime = System.currentTimeMillis()
-        cancelPendingHeart()
-        emitButton("CAMERA", "Camera button (Volume Down)")
+      KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN -> {
+        onVolumeKeyReceived()
         return true
       }
       else -> {
@@ -110,8 +104,7 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
   }
 
   fun handleTouchEvent(event: MotionEvent) {
-    // External touch events are consumed in MainActivity.
-    // No additional detection needed here.
+    // Consumed in MainActivity to prevent phantom taps
   }
 
   private fun evaluateGesture() {
@@ -121,6 +114,7 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
     val absDeltaY = Math.abs(deltaY)
 
     if (absDeltaX > SWIPE_THRESHOLD || absDeltaY > SWIPE_THRESHOLD) {
+      // Swipe = arrow button
       if (absDeltaY >= absDeltaX) {
         if (deltaY < 0) {
           emitButton("ARROW_UP", "Arrow Up (swipe up)")
@@ -135,27 +129,64 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
         }
       }
     } else {
-      val timeSinceVolume = System.currentTimeMillis() - lastVolumeKeyTime
-      if (timeSinceVolume < HEART_DELAY_MS) {
-        return
-      }
-      cancelPendingHeart()
-      pendingHeartRunnable = Runnable {
-        val timeSinceVol = System.currentTimeMillis() - lastVolumeKeyTime
-        if (timeSinceVol >= HEART_DELAY_MS) {
-          emitButton("HEART", "Heart / Like button")
-        }
-        pendingHeartRunnable = null
-      }
-      handler.postDelayed(pendingHeartRunnable!!, HEART_DELAY_MS)
+      // No movement = click = Gear (if volume key) or Heart (if no volume key)
+      onClickReceived()
     }
   }
 
-  private fun cancelPendingHeart() {
-    pendingHeartRunnable?.let {
-      handler.removeCallbacks(it)
-      pendingHeartRunnable = null
+  private fun onVolumeKeyReceived() {
+    if (pendingClick) {
+      // Click already arrived, volume key confirms it's GEAR
+      cancelPending()
+      emitButton("GEAR", "Gear button")
+    } else {
+      // No click yet - wait for one
+      pendingVolumeKey = true
+      schedulePendingResolve()
     }
+  }
+
+  private fun onClickReceived() {
+    if (pendingVolumeKey) {
+      // Volume key already arrived, click confirms it's GEAR
+      cancelPending()
+      emitButton("GEAR", "Gear button")
+    } else {
+      // No volume key yet - wait for one
+      pendingClick = true
+      schedulePendingResolve()
+    }
+  }
+
+  private fun schedulePendingResolve() {
+    // Only schedule if not already scheduled
+    if (pendingRunnable != null) return
+
+    pendingRunnable = Runnable {
+      if (pendingVolumeKey && !pendingClick) {
+        // Volume key only, no click = CAMERA
+        emitButton("CAMERA", "Camera button")
+      } else if (pendingClick && !pendingVolumeKey) {
+        // Click only, no volume key = HEART
+        emitButton("HEART", "Heart / Like button")
+      } else if (pendingVolumeKey && pendingClick) {
+        // Both arrived (shouldn't get here, but just in case) = GEAR
+        emitButton("GEAR", "Gear button")
+      }
+      pendingVolumeKey = false
+      pendingClick = false
+      pendingRunnable = null
+    }
+    handler.postDelayed(pendingRunnable!!, DETECT_WINDOW_MS)
+  }
+
+  private fun cancelPending() {
+    pendingRunnable?.let {
+      handler.removeCallbacks(it)
+      pendingRunnable = null
+    }
+    pendingVolumeKey = false
+    pendingClick = false
   }
 
   private fun emitButton(buttonId: String, label: String) {
