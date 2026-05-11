@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useRef} from 'react';
+import React, {useEffect, useState, useRef, useCallback} from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,64 +7,68 @@ import {
   TouchableOpacity,
   Platform,
   StatusBar,
-  Alert,
   SafeAreaView,
   NativeModules,
   NativeEventEmitter,
+  Animated,
 } from 'react-native';
 
 const {KeyEventListener} = NativeModules;
 const keyEventEmitter = new NativeEventEmitter(KeyEventListener);
 
-interface LogEntry {
+interface ButtonEvent {
   id: string;
+  buttonId: string;
+  label: string;
   timestamp: number;
-  keyCode: number;
-  keyName: string;
-  action: string;
-  source: string;
-  deviceName?: string;
-  scanCode?: number;
 }
 
+const BUTTON_CONFIG: Record<string, {icon: string; color: string; name: string}> = {
+  ARROW_UP: {icon: '↑', color: '#4CAF50', name: 'Arrow Up'},
+  ARROW_DOWN: {icon: '↓', color: '#4CAF50', name: 'Arrow Down'},
+  ARROW_LEFT: {icon: '←', color: '#4CAF50', name: 'Arrow Left'},
+  ARROW_RIGHT: {icon: '→', color: '#4CAF50', name: 'Arrow Right'},
+  CAMERA: {icon: '📷', color: '#FF9800', name: 'Camera'},
+  GEAR: {icon: '⚙️', color: '#2196F3', name: 'Gear'},
+  HEART: {icon: '❤️', color: '#E91E63', name: 'Heart / Like'},
+};
+
 export default function App() {
-  const [events, setEvents] = useState<LogEntry[]>([]);
+  const [events, setEvents] = useState<ButtonEvent[]>([]);
   const [isActive, setIsActive] = useState(false);
   const [lastButton, setLastButton] = useState<string | null>(null);
   const eventCounter = useRef(0);
+  const flashAnim = useRef(new Animated.Value(0)).current;
+
+  const flashButton = useCallback((buttonId: string) => {
+    setLastButton(buttonId);
+    flashAnim.setValue(1);
+    Animated.timing(flashAnim, {
+      toValue: 0,
+      duration: 1500,
+      useNativeDriver: false,
+    }).start();
+  }, [flashAnim]);
 
   useEffect(() => {
-    const subscription = keyEventEmitter.addListener('onKeyEvent', (event: any) => {
-      if (event.action !== 'KEY_DOWN') return;
-
+    const subscription = keyEventEmitter.addListener('onButtonDetected', (event: any) => {
       eventCounter.current += 1;
-      const entry: LogEntry = {
+      const entry: ButtonEvent = {
         id: `${eventCounter.current}`,
+        buttonId: event.buttonId,
+        label: event.label,
         timestamp: event.timestamp,
-        keyCode: event.keyCode,
-        keyName: event.keyName,
-        action: event.action,
-        source: event.source,
-        deviceName: event.deviceName,
-        scanCode: event.scanCode,
       };
 
-      setEvents(prev => [entry, ...prev].slice(0, 200));
-      setLastButton(event.keyName);
-
-      Alert.alert(
-        'Button Pressed!',
-        `${getButtonLabel(event.keyName)}\n\nKey: ${event.keyName}\nCode: ${event.keyCode}\nSource: ${event.source}`,
-        [{text: 'OK'}],
-        {cancelable: true},
-      );
+      setEvents(prev => [entry, ...prev].slice(0, 100));
+      flashButton(event.buttonId);
     });
 
     return () => {
       subscription.remove();
       KeyEventListener?.stopListening();
     };
-  }, []);
+  }, [flashButton]);
 
   const handleToggle = () => {
     if (isActive) {
@@ -82,40 +86,6 @@ export default function App() {
     eventCounter.current = 0;
   };
 
-  const getButtonLabel = (keyName: string): string => {
-    const labels: Record<string, string> = {
-      DPAD_UP: 'Arrow Up button pressed',
-      DPAD_DOWN: 'Arrow Down button pressed',
-      DPAD_LEFT: 'Arrow Left button pressed',
-      DPAD_RIGHT: 'Arrow Right button pressed',
-      DPAD_CENTER: 'D-Pad Center button pressed',
-      ENTER: 'Enter button pressed',
-      VOLUME_UP: 'Volume Up / Camera button pressed',
-      VOLUME_DOWN: 'Volume Down button pressed',
-      MEDIA_PLAY_PAUSE: 'Media Play/Pause button pressed',
-      MEDIA_NEXT: 'Media Next button pressed',
-      MEDIA_PREVIOUS: 'Media Previous button pressed',
-      CAMERA: 'Camera button pressed',
-      SPACE: 'Space button pressed',
-      TAB: 'Tab button pressed',
-      ESCAPE: 'Escape button pressed',
-      PAGE_UP: 'Page Up button pressed',
-      PAGE_DOWN: 'Page Down button pressed',
-      BACK: 'Back button pressed',
-      SEARCH: 'Search button pressed',
-    };
-    return labels[keyName] || `${keyName} button pressed`;
-  };
-
-  const getButtonColor = (keyName: string): string => {
-    if (keyName.startsWith('DPAD')) return '#4CAF50';
-    if (keyName.startsWith('VOLUME')) return '#FF9800';
-    if (keyName.startsWith('MEDIA')) return '#9C27B0';
-    if (keyName === 'ENTER') return '#2196F3';
-    if (keyName === 'CAMERA') return '#FF5722';
-    return '#607D8B';
-  };
-
   const formatTime = (ts: number): string => {
     const d = new Date(ts);
     return `${d.getHours().toString().padStart(2, '0')}:${d
@@ -127,50 +97,83 @@ export default function App() {
       .padStart(3, '0')}`;
   };
 
-  const renderEvent = ({item}: {item: LogEntry}) => (
-    <View style={[styles.eventRow, {borderLeftColor: getButtonColor(item.keyName)}]}>
-      <View style={styles.eventHeader}>
-        <Text style={styles.eventKeyName}>{item.keyName}</Text>
-        <Text style={styles.eventTime}>{formatTime(item.timestamp)}</Text>
+  const getConfig = (buttonId: string) =>
+    BUTTON_CONFIG[buttonId] || {icon: '?', color: '#607D8B', name: buttonId};
+
+  const renderEvent = ({item}: {item: ButtonEvent}) => {
+    const config = getConfig(item.buttonId);
+    return (
+      <View style={[styles.eventRow, {borderLeftColor: config.color}]}>
+        <View style={styles.eventHeader}>
+          <Text style={styles.eventIcon}>{config.icon}</Text>
+          <Text style={[styles.eventName, {color: config.color}]}>{config.name}</Text>
+          <Text style={styles.eventTime}>{formatTime(item.timestamp)}</Text>
+        </View>
       </View>
-      <View style={styles.eventDetails}>
-        <Text style={styles.eventDetail}>Code: {item.keyCode}</Text>
-        {item.scanCode !== undefined && item.scanCode !== 0 && (
-          <Text style={styles.eventDetail}>Scan: {item.scanCode}</Text>
-        )}
-        <Text style={styles.eventDetail}>Src: {item.source}</Text>
-        {item.deviceName && item.deviceName !== 'unknown' && (
-          <Text style={styles.eventDetail}>Dev: {item.deviceName}</Text>
-        )}
-      </View>
-      <Text style={styles.eventLabel}>{getButtonLabel(item.keyName)}</Text>
-    </View>
-  );
+    );
+  };
+
+  const lastConfig = lastButton ? getConfig(lastButton) : null;
+  const flashBg = flashAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(0,0,0,0)', lastConfig ? lastConfig.color + '40' : 'rgba(0,0,0,0)'],
+  });
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+      <StatusBar barStyle="light-content" backgroundColor="#0d0d1a" />
       <View style={styles.header}>
-        <Text style={styles.title}>BT Remote Logger</Text>
-        <Text style={styles.subtitle}>
-          {Platform.OS === 'ios' ? 'iOS' : 'Android'} | React Native
-        </Text>
+        <Text style={styles.title}>BT Remote Demo</Text>
+        <Text style={styles.subtitle}>Beauty-R1 Button Detector | v3.0</Text>
       </View>
 
       <View style={styles.statusBar}>
         <View style={[styles.statusDot, isActive ? styles.dotActive : styles.dotInactive]} />
         <Text style={styles.statusText}>
-          {isActive ? 'Listening for key events...' : 'Tap Start to begin'}
+          {isActive ? 'Listening...' : 'Tap Start to begin'}
         </Text>
-        <Text style={styles.eventCount}>{events.length} events</Text>
+        <Text style={styles.eventCount}>{events.length} presses</Text>
       </View>
 
-      {lastButton && (
-        <View style={[styles.lastButtonBox, {backgroundColor: getButtonColor(lastButton) + '20', borderColor: getButtonColor(lastButton)}]}>
-          <Text style={styles.lastButtonLabel}>Last Detected:</Text>
-          <Text style={[styles.lastButtonName, {color: getButtonColor(lastButton)}]}>
-            {getButtonLabel(lastButton)}
+      <Animated.View style={[styles.bigDisplay, {backgroundColor: flashBg}]}>
+        {lastButton ? (
+          <>
+            <Text style={styles.bigIcon}>{lastConfig?.icon}</Text>
+            <Text style={[styles.bigName, {color: lastConfig?.color}]}>{lastConfig?.name}</Text>
+            <Text style={styles.bigLabel}>Button Detected!</Text>
+          </>
+        ) : (
+          <Text style={styles.bigPlaceholder}>
+            {isActive ? 'Press a button on your remote...' : 'Start listening to detect buttons'}
           </Text>
+        )}
+      </Animated.View>
+
+      {isActive && (
+        <View style={styles.remoteLayout}>
+          <Text style={styles.remoteSectionTitle}>Remote Buttons</Text>
+          <View style={styles.remoteGrid}>
+            <View style={styles.remoteRow}>
+              <View style={styles.remoteSpacer} />
+              <ButtonIndicator id="ARROW_UP" lastButton={lastButton} />
+              <View style={styles.remoteSpacer} />
+            </View>
+            <View style={styles.remoteRow}>
+              <ButtonIndicator id="ARROW_LEFT" lastButton={lastButton} />
+              <View style={styles.remoteCenter} />
+              <ButtonIndicator id="ARROW_RIGHT" lastButton={lastButton} />
+            </View>
+            <View style={styles.remoteRow}>
+              <View style={styles.remoteSpacer} />
+              <ButtonIndicator id="ARROW_DOWN" lastButton={lastButton} />
+              <View style={styles.remoteSpacer} />
+            </View>
+            <View style={[styles.remoteRow, {marginTop: 8}]}>
+              <ButtonIndicator id="GEAR" lastButton={lastButton} />
+              <ButtonIndicator id="HEART" lastButton={lastButton} wide />
+              <ButtonIndicator id="CAMERA" lastButton={lastButton} />
+            </View>
+          </View>
         </View>
       )}
 
@@ -181,21 +184,9 @@ export default function App() {
           <Text style={styles.buttonText}>{isActive ? 'Stop' : 'Start'}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.buttonClear} onPress={handleClear}>
-          <Text style={styles.buttonText}>Clear Log</Text>
+          <Text style={styles.buttonText}>Clear</Text>
         </TouchableOpacity>
       </View>
-
-      {events.length === 0 && isActive && (
-        <View style={styles.instructions}>
-          <Text style={styles.instructionTitle}>Ready to capture!</Text>
-          <Text style={styles.instructionText}>
-            1. Make sure your BT remote is paired{'\n'}
-            2. Press any button on the remote{'\n'}
-            3. Events will appear below with details{'\n'}
-            4. An alert will pop up for each press
-          </Text>
-        </View>
-      )}
 
       <FlatList
         data={events}
@@ -204,55 +195,78 @@ export default function App() {
         style={styles.eventList}
         contentContainerStyle={styles.eventListContent}
         ListEmptyComponent={
-          !isActive ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>Press "Start" and use your Bluetooth remote</Text>
-            </View>
-          ) : null
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>
+              {isActive ? 'Waiting for button presses...' : 'Press Start to begin'}
+            </Text>
+          </View>
         }
       />
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>BT Remote Event Logger v1.0 | {Platform.OS.toUpperCase()}</Text>
+        <Text style={styles.footerText}>BT Remote Demo v3.0 | {Platform.OS.toUpperCase()}</Text>
       </View>
     </SafeAreaView>
   );
 }
 
+function ButtonIndicator({id, lastButton, wide}: {id: string; lastButton: string | null; wide?: boolean}) {
+  const config = BUTTON_CONFIG[id];
+  const isActive = lastButton === id;
+  return (
+    <View
+      style={[
+        styles.remoteBtn,
+        wide && styles.remoteBtnWide,
+        isActive && {backgroundColor: config.color + '40', borderColor: config.color},
+      ]}>
+      <Text style={[styles.remoteBtnIcon, isActive && {opacity: 1}]}>{config.icon}</Text>
+      <Text style={[styles.remoteBtnLabel, isActive && {color: config.color}]}>{config.name}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#1a1a2e'},
-  header: {paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#2a2a4e'},
-  title: {fontSize: 24, fontWeight: 'bold', color: '#e0e0ff'},
-  subtitle: {fontSize: 13, color: '#8888aa', marginTop: 2},
-  statusBar: {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, backgroundColor: '#16162b'},
+  container: {flex: 1, backgroundColor: '#0d0d1a'},
+  header: {paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#1a1a30'},
+  title: {fontSize: 22, fontWeight: 'bold', color: '#e0e0ff'},
+  subtitle: {fontSize: 12, color: '#6666aa', marginTop: 2},
+  statusBar: {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 8, backgroundColor: '#0a0a18'},
   statusDot: {width: 10, height: 10, borderRadius: 5, marginRight: 8},
   dotActive: {backgroundColor: '#4CAF50'},
-  dotInactive: {backgroundColor: '#666'},
-  statusText: {flex: 1, color: '#aaa', fontSize: 14},
-  eventCount: {color: '#666', fontSize: 12},
-  lastButtonBox: {marginHorizontal: 20, marginTop: 12, padding: 14, borderRadius: 10, borderWidth: 1},
-  lastButtonLabel: {fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: 1},
-  lastButtonName: {fontSize: 20, fontWeight: 'bold', marginTop: 4},
-  controls: {flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, gap: 10},
-  button: {flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center'},
+  dotInactive: {backgroundColor: '#444'},
+  statusText: {flex: 1, color: '#888', fontSize: 13},
+  eventCount: {color: '#555', fontSize: 12},
+  bigDisplay: {marginHorizontal: 20, marginTop: 12, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#1a1a30', alignItems: 'center', minHeight: 100, justifyContent: 'center'},
+  bigIcon: {fontSize: 48},
+  bigName: {fontSize: 24, fontWeight: 'bold', marginTop: 4},
+  bigLabel: {fontSize: 13, color: '#888', marginTop: 4},
+  bigPlaceholder: {fontSize: 14, color: '#555', textAlign: 'center'},
+  remoteLayout: {marginHorizontal: 20, marginTop: 12, padding: 12, backgroundColor: '#12122a', borderRadius: 12, borderWidth: 1, borderColor: '#1a1a30'},
+  remoteSectionTitle: {fontSize: 11, color: '#555', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, textAlign: 'center'},
+  remoteGrid: {alignItems: 'center'},
+  remoteRow: {flexDirection: 'row', justifyContent: 'center', gap: 4},
+  remoteSpacer: {width: 52, height: 36},
+  remoteCenter: {width: 52, height: 36},
+  remoteBtn: {width: 52, height: 36, borderRadius: 6, borderWidth: 1, borderColor: '#2a2a44', backgroundColor: '#16162e', alignItems: 'center', justifyContent: 'center'},
+  remoteBtnWide: {width: 80},
+  remoteBtnIcon: {fontSize: 14, opacity: 0.4},
+  remoteBtnLabel: {fontSize: 7, color: '#555', marginTop: 1},
+  controls: {flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 10, gap: 10},
+  button: {flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center'},
   buttonStart: {backgroundColor: '#4CAF50'},
   buttonStop: {backgroundColor: '#f44336'},
-  buttonClear: {flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center', backgroundColor: '#333355'},
-  buttonText: {color: '#fff', fontWeight: 'bold', fontSize: 16},
-  instructions: {marginHorizontal: 20, padding: 14, backgroundColor: '#22224a', borderRadius: 10, marginBottom: 8},
-  instructionTitle: {color: '#e0e0ff', fontWeight: 'bold', fontSize: 15, marginBottom: 6},
-  instructionText: {color: '#999', fontSize: 13, lineHeight: 20},
+  buttonClear: {flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center', backgroundColor: '#222244'},
+  buttonText: {color: '#fff', fontWeight: 'bold', fontSize: 15},
   eventList: {flex: 1, paddingHorizontal: 20},
-  eventListContent: {paddingBottom: 20},
-  eventRow: {backgroundColor: '#22224a', borderRadius: 8, padding: 12, marginBottom: 8, borderLeftWidth: 4},
-  eventHeader: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
-  eventKeyName: {color: '#e0e0ff', fontWeight: 'bold', fontSize: 16, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace'},
-  eventTime: {color: '#666', fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace'},
-  eventDetails: {flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, gap: 8},
-  eventDetail: {color: '#8888aa', fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace'},
-  eventLabel: {color: '#aaaacc', fontSize: 13, marginTop: 6, fontStyle: 'italic'},
-  emptyState: {paddingVertical: 40, alignItems: 'center'},
-  emptyText: {color: '#555', fontSize: 14},
-  footer: {paddingVertical: 8, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#2a2a4e'},
-  footerText: {color: '#444', fontSize: 11},
+  eventListContent: {paddingBottom: 16},
+  eventRow: {backgroundColor: '#14142a', borderRadius: 8, padding: 10, marginBottom: 6, borderLeftWidth: 3},
+  eventHeader: {flexDirection: 'row', alignItems: 'center', gap: 8},
+  eventIcon: {fontSize: 18},
+  eventName: {flex: 1, fontWeight: 'bold', fontSize: 15},
+  eventTime: {color: '#555', fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace'},
+  emptyState: {paddingVertical: 30, alignItems: 'center'},
+  emptyText: {color: '#444', fontSize: 13},
+  footer: {paddingVertical: 6, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#1a1a30'},
+  footerText: {color: '#333', fontSize: 10},
 });

@@ -1,6 +1,9 @@
 package com.btremotelogger.keyevent
 
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.InputDevice
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactApplicationContext
@@ -12,6 +15,20 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
 
   override fun getName(): String = "KeyEventListener"
 
+  private val handler = Handler(Looper.getMainLooper())
+
+  private var hoverStartX = 0f
+  private var hoverStartY = 0f
+  private var hoverLastX = 0f
+  private var hoverLastY = 0f
+  private var isTracking = false
+
+  private var pendingHeartRunnable: Runnable? = null
+  private var lastVolumeKeyTime = 0L
+
+  private val SWIPE_THRESHOLD = 100f
+  private val HEART_DELAY_MS = 300L
+
   @ReactMethod
   fun startListening() {
     instance = this
@@ -22,86 +39,139 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
     if (instance == this) {
       instance = null
     }
+    cancelPendingHeart()
   }
 
   @ReactMethod
-  fun addListener(eventName: String) {
-    // Required for RN NativeEventEmitter
-  }
+  fun addListener(eventName: String) {}
 
   @ReactMethod
-  fun removeListeners(count: Int) {
-    // Required for RN NativeEventEmitter
-  }
+  fun removeListeners(count: Int) {}
 
-  fun emitKeyEvent(keyCode: Int, action: Int, scanCode: Int, source: Int, deviceId: Int, deviceName: String) {
-    val actionStr = when (action) {
-      KeyEvent.ACTION_DOWN -> "KEY_DOWN"
-      KeyEvent.ACTION_UP -> "KEY_UP"
-      else -> "ACTION_$action"
+  fun handleKeyEvent(keyCode: Int, action: Int, deviceName: String): Boolean {
+    if (action != KeyEvent.ACTION_DOWN) return true
+
+    when (keyCode) {
+      KeyEvent.KEYCODE_VOLUME_UP -> {
+        lastVolumeKeyTime = System.currentTimeMillis()
+        cancelPendingHeart()
+        emitButton("CAMERA", "Camera button (Volume Up)")
+        return true
+      }
+      KeyEvent.KEYCODE_VOLUME_DOWN -> {
+        lastVolumeKeyTime = System.currentTimeMillis()
+        cancelPendingHeart()
+        emitButton("GEAR", "Gear button (Volume Down)")
+        return true
+      }
+      else -> {
+        return false
+      }
     }
+  }
 
-    val keyName = resolveKeyName(keyCode)
-    val sourceName = resolveSourceName(source)
+  fun handleMotionEvent(event: MotionEvent) {
+    when (event.actionMasked) {
+      MotionEvent.ACTION_HOVER_ENTER -> {
+        hoverStartX = event.x
+        hoverStartY = event.y
+        hoverLastX = event.x
+        hoverLastY = event.y
+        isTracking = true
+      }
+      MotionEvent.ACTION_HOVER_MOVE -> {
+        if (isTracking) {
+          hoverLastX = event.x
+          hoverLastY = event.y
+        }
+      }
+      MotionEvent.ACTION_HOVER_EXIT -> {
+        if (isTracking) {
+          evaluateGesture()
+          isTracking = false
+        }
+      }
+      11 -> { // ACTION_BUTTON_PRESS
+        if (!isTracking) {
+          hoverStartX = event.x
+          hoverStartY = event.y
+          isTracking = true
+        }
+      }
+      12 -> { // ACTION_BUTTON_RELEASE
+        if (isTracking) {
+          hoverLastX = event.x
+          hoverLastY = event.y
+          evaluateGesture()
+          isTracking = false
+        }
+      }
+    }
+  }
 
+  fun handleTouchEvent(event: MotionEvent) {
+    // External touch events are consumed in MainActivity.
+    // No additional detection needed here.
+  }
+
+  private fun evaluateGesture() {
+    val deltaX = hoverLastX - hoverStartX
+    val deltaY = hoverLastY - hoverStartY
+    val absDeltaX = Math.abs(deltaX)
+    val absDeltaY = Math.abs(deltaY)
+
+    if (absDeltaX > SWIPE_THRESHOLD || absDeltaY > SWIPE_THRESHOLD) {
+      if (absDeltaY >= absDeltaX) {
+        if (deltaY < 0) {
+          emitButton("ARROW_UP", "Arrow Up (swipe up)")
+        } else {
+          emitButton("ARROW_DOWN", "Arrow Down (swipe down)")
+        }
+      } else {
+        if (deltaX < 0) {
+          emitButton("ARROW_LEFT", "Arrow Left (swipe left)")
+        } else {
+          emitButton("ARROW_RIGHT", "Arrow Right (swipe right)")
+        }
+      }
+    } else {
+      val timeSinceVolume = System.currentTimeMillis() - lastVolumeKeyTime
+      if (timeSinceVolume < HEART_DELAY_MS) {
+        return
+      }
+      cancelPendingHeart()
+      pendingHeartRunnable = Runnable {
+        val timeSinceVol = System.currentTimeMillis() - lastVolumeKeyTime
+        if (timeSinceVol >= HEART_DELAY_MS) {
+          emitButton("HEART", "Heart / Like button")
+        }
+        pendingHeartRunnable = null
+      }
+      handler.postDelayed(pendingHeartRunnable!!, HEART_DELAY_MS)
+    }
+  }
+
+  private fun cancelPendingHeart() {
+    pendingHeartRunnable?.let {
+      handler.removeCallbacks(it)
+      pendingHeartRunnable = null
+    }
+  }
+
+  private fun emitButton(buttonId: String, label: String) {
     val params = Arguments.createMap().apply {
-      putInt("keyCode", keyCode)
-      putString("keyName", keyName)
-      putString("action", actionStr)
-      putString("source", sourceName)
+      putString("buttonId", buttonId)
+      putString("label", label)
       putDouble("timestamp", System.currentTimeMillis().toDouble())
-      putBoolean("isConsumed", true)
-      putInt("scanCode", scanCode)
-      putInt("deviceId", deviceId)
-      putString("deviceName", deviceName)
     }
 
-    reactApplicationContext
-      .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-      .emit("onKeyEvent", params)
-  }
-
-  private fun resolveKeyName(keyCode: Int): String {
-    return when (keyCode) {
-      KeyEvent.KEYCODE_DPAD_UP -> "DPAD_UP"
-      KeyEvent.KEYCODE_DPAD_DOWN -> "DPAD_DOWN"
-      KeyEvent.KEYCODE_DPAD_LEFT -> "DPAD_LEFT"
-      KeyEvent.KEYCODE_DPAD_RIGHT -> "DPAD_RIGHT"
-      KeyEvent.KEYCODE_DPAD_CENTER -> "DPAD_CENTER"
-      KeyEvent.KEYCODE_ENTER -> "ENTER"
-      KeyEvent.KEYCODE_VOLUME_UP -> "VOLUME_UP"
-      KeyEvent.KEYCODE_VOLUME_DOWN -> "VOLUME_DOWN"
-      KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> "MEDIA_PLAY_PAUSE"
-      KeyEvent.KEYCODE_MEDIA_NEXT -> "MEDIA_NEXT"
-      KeyEvent.KEYCODE_MEDIA_PREVIOUS -> "MEDIA_PREVIOUS"
-      KeyEvent.KEYCODE_MEDIA_STOP -> "MEDIA_STOP"
-      KeyEvent.KEYCODE_CAMERA -> "CAMERA"
-      KeyEvent.KEYCODE_FOCUS -> "FOCUS"
-      KeyEvent.KEYCODE_SEARCH -> "SEARCH"
-      KeyEvent.KEYCODE_BACK -> "BACK"
-      KeyEvent.KEYCODE_HOME -> "HOME"
-      KeyEvent.KEYCODE_MENU -> "MENU"
-      KeyEvent.KEYCODE_TAB -> "TAB"
-      KeyEvent.KEYCODE_SPACE -> "SPACE"
-      KeyEvent.KEYCODE_PAGE_UP -> "PAGE_UP"
-      KeyEvent.KEYCODE_PAGE_DOWN -> "PAGE_DOWN"
-      KeyEvent.KEYCODE_ESCAPE -> "ESCAPE"
-      KeyEvent.KEYCODE_BUTTON_A -> "BUTTON_A"
-      KeyEvent.KEYCODE_BUTTON_B -> "BUTTON_B"
-      KeyEvent.KEYCODE_BUTTON_X -> "BUTTON_X"
-      KeyEvent.KEYCODE_BUTTON_Y -> "BUTTON_Y"
-      else -> KeyEvent.keyCodeToString(keyCode)
+    try {
+      reactApplicationContext
+        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+        .emit("onButtonDetected", params)
+    } catch (e: Exception) {
+      // Context may not be ready
     }
-  }
-
-  private fun resolveSourceName(source: Int): String {
-    val sources = mutableListOf<String>()
-    if (source and InputDevice.SOURCE_KEYBOARD != 0) sources.add("KEYBOARD")
-    if (source and InputDevice.SOURCE_DPAD != 0) sources.add("DPAD")
-    if (source and InputDevice.SOURCE_GAMEPAD != 0) sources.add("GAMEPAD")
-    if (source and InputDevice.SOURCE_JOYSTICK != 0) sources.add("JOYSTICK")
-    if (sources.isEmpty()) sources.add("0x${Integer.toHexString(source)}")
-    return sources.joinToString("|")
   }
 
   companion object {
