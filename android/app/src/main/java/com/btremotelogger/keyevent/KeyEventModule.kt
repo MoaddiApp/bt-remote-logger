@@ -30,9 +30,9 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
 
   private val SWIPE_THRESHOLD = 100f
 
-  // Cooldown: ignore events for a short period after emitting a button
   private var lastEmitTime = 0L
   private val COOLDOWN_MS = 600L
+  private var lastGestureEvalTime = 0L
 
   @ReactMethod
   fun startListening() {
@@ -95,7 +95,8 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
         }
       }
       11 -> { // ACTION_BUTTON_PRESS
-        if (!isTracking) {
+        val sinceGesture = System.currentTimeMillis() - lastGestureEvalTime
+        if (!isTracking && sinceGesture > COOLDOWN_MS) {
           hoverStartX = event.x
           hoverStartY = event.y
           isTracking = true
@@ -115,6 +116,7 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
   fun handleTouchEvent(event: MotionEvent) {}
 
   private fun evaluateGesture() {
+    lastGestureEvalTime = System.currentTimeMillis()
     if (isInCooldown()) return
 
     val deltaX = hoverLastX - hoverStartX
