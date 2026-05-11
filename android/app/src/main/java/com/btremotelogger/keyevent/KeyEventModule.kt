@@ -32,7 +32,9 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
 
   private var lastEmitTime = 0L
   private val COOLDOWN_MS = 600L
-  private var lastGestureEvalTime = 0L
+
+  private var hoverExitRunnable: Runnable? = null
+  private val HOVER_EVAL_DELAY_MS = 200L
 
   @ReactMethod
   fun startListening() {
@@ -45,6 +47,7 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
       instance = null
     }
     cancelPending()
+    cancelHoverEval()
   }
 
   @ReactMethod
@@ -90,19 +93,21 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
       }
       MotionEvent.ACTION_HOVER_EXIT -> {
         if (isTracking) {
-          evaluateGesture()
-          isTracking = false
+          hoverLastX = event.x
+          hoverLastY = event.y
+          scheduleHoverEval()
         }
       }
       11 -> { // ACTION_BUTTON_PRESS
-        val sinceGesture = System.currentTimeMillis() - lastGestureEvalTime
-        if (!isTracking && sinceGesture > COOLDOWN_MS) {
+        cancelHoverEval()
+        if (!isTracking) {
           hoverStartX = event.x
           hoverStartY = event.y
           isTracking = true
         }
       }
       12 -> { // ACTION_BUTTON_RELEASE
+        cancelHoverEval()
         if (isTracking) {
           hoverLastX = event.x
           hoverLastY = event.y
@@ -115,8 +120,26 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
 
   fun handleTouchEvent(event: MotionEvent) {}
 
+  private fun scheduleHoverEval() {
+    cancelHoverEval()
+    hoverExitRunnable = Runnable {
+      if (isTracking) {
+        evaluateGesture()
+        isTracking = false
+      }
+      hoverExitRunnable = null
+    }
+    handler.postDelayed(hoverExitRunnable!!, HOVER_EVAL_DELAY_MS)
+  }
+
+  private fun cancelHoverEval() {
+    hoverExitRunnable?.let {
+      handler.removeCallbacks(it)
+      hoverExitRunnable = null
+    }
+  }
+
   private fun evaluateGesture() {
-    lastGestureEvalTime = System.currentTimeMillis()
     if (isInCooldown()) return
 
     val deltaX = hoverLastX - hoverStartX
@@ -201,6 +224,7 @@ class KeyEventModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
   private fun emitButton(buttonId: String, label: String) {
     lastEmitTime = System.currentTimeMillis()
     cancelPending()
+    cancelHoverEval()
 
     val params = Arguments.createMap().apply {
       putString("buttonId", buttonId)
